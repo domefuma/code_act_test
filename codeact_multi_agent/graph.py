@@ -204,8 +204,60 @@ model = init_chat_model("o4-mini-2025-04-16", model_provider="openai")
 
 # Create a temporary directory for sandbox sessions
 sessions_dir = tempfile.mkdtemp()
-sandbox = PyodideSandbox(sessions_dir=sessions_dir, allow_net=True)
-eval_fn = create_pyodide_eval_fn(sandbox)
+
+# Try to create PyodideSandbox with error handling for Deno dependency
+try:
+    sandbox = PyodideSandbox(sessions_dir=sessions_dir, allow_net=True)
+    eval_fn = create_pyodide_eval_fn(sandbox)
+    print("✅ PyodideSandbox initialized successfully with Deno support")
+except RuntimeError as e:
+    if "Deno is not installed" in str(e):
+        print("⚠️  Deno not available, falling back to basic Python execution")
+        # Create a fallback eval function that uses exec() instead of PyodideSandbox
+        def create_fallback_eval_fn() -> EvalFunction:
+            def sync_eval_fn(code: str, _locals: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+                try:
+                    # Create a safe execution environment
+                    safe_globals = {
+                        '__builtins__': {
+                            'len': len, 'str': str, 'int': int, 'float': float,
+                            'print': print, 'range': range, 'list': list,
+                            'dict': dict, 'tuple': tuple, 'set': set,
+                        },
+                        'math': __import__('math'),
+                        'add': add, 'multiply': multiply, 'divide': divide,
+                        'subtract': subtract, 'sin': sin, 'cos': cos,
+                        'radians': radians, 'exponentiation': exponentiation,
+                        'sqrt': sqrt, 'ceil': ceil,
+                    }
+                    safe_globals.update(_locals)
+                    
+                    # Capture stdout
+                    from io import StringIO
+                    import sys
+                    old_stdout = sys.stdout
+                    sys.stdout = captured_output = StringIO()
+                    
+                    # Execute the code
+                    exec(code, safe_globals)
+                    
+                    # Restore stdout and get output
+                    sys.stdout = old_stdout
+                    output = captured_output.getvalue()
+                    
+                    # Get new variables
+                    new_vars = {k: v for k, v in safe_globals.items() 
+                               if k not in _locals and not k.startswith('_') and not callable(v)}
+                    
+                    return output or "<Code executed successfully>", new_vars
+                except Exception as exec_error:
+                    return f"Error: {str(exec_error)}", {}
+            return sync_eval_fn
+        
+        eval_fn = create_fallback_eval_fn()
+    else:
+        raise e
+
 code_act = create_codeact(model, tools, eval_fn)
 agent = code_act.compile()
 

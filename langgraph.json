@@ -3,6 +3,13 @@
     "graphs": {
       "agent": "./codeact_multi_agent/graph.py:agent"
     },
-    "env": ".env"
-  }
+    "env": ".env",
+    "dockerfile_lines": [
+        "RUN apt-get update && apt-get install -y curl unzip",
+        "RUN curl -fsSL https://deno.land/x/install/install.sh | sh",
+        "RUN mv /root/.deno/bin/deno /usr/local/bin/deno",
+        "RUN chmod +x /usr/local/bin/deno",
+        "RUN deno --version"
+    ]
+}
   
