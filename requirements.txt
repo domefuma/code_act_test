@@ -1,0 +1,5 @@
+langgraph-codeact
+langchain[anthropic]
+langchain-sandbox
+langchain-openai
+langchain-core 
